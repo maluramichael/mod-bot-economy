@@ -1,0 +1,93 @@
+[worldserver]
+
+########################################
+# mod-bot-economy configuration
+########################################
+#
+# A "Dad Mode" bot-economy module for the mod-playerbots fork.
+# It makes random playerbots feed a small, self-contained economy:
+#   * a gold bonus on creature kills
+#   * a guild "tax" that trickles bot gold into their guild bank
+#   * a warehouse ledger of surplus deposits
+#   * a periodic, player-safe warehouse "sorter" (stack consolidation)
+#
+# EVERY behavior in this module is gated behind DadMode.Enabled below.
+# With DadMode.Enabled = 0 the module loads but does nothing at all.
+#
+# NOTE: DadMode.Enabled is the CANONICAL global kill-switch for the whole
+# "Dad Mode" family of modules. It is DECLARED here and read by all of them.
+#
+
+#
+#    DadMode.Enabled
+#        Master on/off switch for all Dad Mode behavior (this module and the
+#        rest of the Dad Mode family). 0 = everything off.
+#        Default: 0
+#
+DadMode.Enabled = 0
+
+#
+#    DadMode.Economy.KillGoldBonusPct
+#        Percentage bonus gold granted to a random bot when it kills a creature.
+#        The "base" kill value is derived from the victim's level. If the base
+#        works out to 0 a tiny flat amount is granted instead. 0 disables the
+#        bonus entirely (default), which keeps things quiet unless you opt in.
+#        Default: 0
+#
+DadMode.Economy.KillGoldBonusPct = 0
+
+#
+#    DadMode.Economy.GuildTaxPct
+#        Percentage of the gold a bot JUST EARNED this event (the taxable
+#        increment - e.g. a kill's gold value - NOT the bot's whole wallet) that
+#        is moved into its guild bank. A floor of 1 copper is always applied so
+#        tiny incomes still contribute at least 1 copper; the tax never exceeds
+#        the amount earned nor the bot's on-hand gold.
+#        Default: 1
+#
+DadMode.Economy.GuildTaxPct = 1
+
+#
+#    DadMode.Economy.TaxMinGoldCopper
+#        On-hand gold threshold (in COPPER) a bot must exceed before any guild
+#        tax is taken. 5000 copper = 50 silver.
+#        Default: 5000
+#
+DadMode.Economy.TaxMinGoldCopper = 5000
+
+#
+#    DadMode.Economy.SorterEnabled
+#        Enable the periodic warehouse sorter (stack consolidation pass).
+#        Default: 1
+#
+DadMode.Economy.SorterEnabled = 1
+
+#
+#    DadMode.Economy.SorterIntervalSec
+#        How often (in seconds) the warehouse sorter runs.
+#        Default: 300
+#
+DadMode.Economy.SorterIntervalSec = 300
+
+#
+#    DadMode.Economy.WarehouseLootThreshold
+#        Minimum item Quality a looted item must have before it is recorded as a
+#        row in the bot_warehouse ledger when a random bot loots it. Quality uses
+#        the standard WotLK scale (0 = Poor/grey, 1 = Common/white, 2 = Uncommon/
+#        green, 3 = Rare/blue, 4 = Epic/purple, 5 = Legendary, ...). 0 records
+#        EVERY loot (highest DB write volume); raise it to only log valuable drops.
+#        This is a ledger only - no real inventory is ever moved.
+#        Default: 0
+#
+DadMode.Economy.WarehouseLootThreshold = 0
+
+#
+#    DadMode.Economy.WarehouseSweepSec
+#        How often (in seconds) the periodic gold-surplus sweep runs. The sweep
+#        iterates all online random bots and writes a gold-sentinel warehouse row
+#        for any bot whose on-hand gold is above TaxMinGoldCopper. This is what
+#        records already-online bots (the login hook only fires at login). Ledger
+#        only - no real gold is moved.
+#        Default: 600
+#
+DadMode.Economy.WarehouseSweepSec = 600
