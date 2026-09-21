@@ -6,13 +6,11 @@
  *
  * Behaviors (ALL gated behind DadMode.Enabled):
  *   1. Kill-gold bonus  - random bots get a small gold bonus per creature kill.
- *   2. Guild tax        - a slice of a bot's on-hand gold trickles into its
- *                         guild bank (via the real Guild deposit path).
- *   3. Direct deposit   - ledger rows are written to bot_warehouse: looted
+ *   2. Direct deposit   - ledger rows are written to bot_warehouse: looted
  *                         ITEMS as they drop (on the loot hook), plus a bot's
  *                         surplus GOLD at login AND on a periodic sweep of
  *                         already-online bots. Never moves real inventory/gold.
- *   4. Bank sorter      - a periodic, PLAYER-SAFE pass that consolidates
+ *   3. Bank sorter      - a periodic, PLAYER-SAFE pass that consolidates
  *                         duplicate warehouse stacks, skipping any guild whose
  *                         real (non-bot) members are currently online.
  *
@@ -87,19 +85,6 @@ namespace
     void EnsureSchema()
     {
         CharacterDatabase.Execute(
-            "CREATE TABLE IF NOT EXISTS `bot_tax_log` ("
-            "`id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, "
-            "`bot_guid` INT UNSIGNED NOT NULL, "
-            "`guild_id` INT UNSIGNED NOT NULL, "
-            "`gold_copper` INT UNSIGNED NOT NULL, "
-            "`ts` INT UNSIGNED NOT NULL, "
-            "PRIMARY KEY (`id`), "
-            "KEY `idx_bot` (`bot_guid`), "
-            "KEY `idx_guild` (`guild_id`), "
-            "KEY `idx_ts` (`ts`)"
-            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
-
-        CharacterDatabase.Execute(
             "CREATE TABLE IF NOT EXISTS `bot_warehouse` ("
             "`id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, "
             "`owner_guid` INT UNSIGNED NOT NULL, "
@@ -112,72 +97,9 @@ namespace
             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
     }
 
-    // ---- guild tax ------------------------------------------------------
-    //
-    // Tax GuildTaxPct% of the gold the bot JUST EARNED this event (the taxable
-    // increment - e.g. a kill's gold value - NOT the bot's whole wallet), with a
-    // floor of 1 copper so tiny incomes still contribute. The tax is moved into
-    // the guild bank via the REAL deposit path,
-    // Guild::HandleMemberDepositMoney(WorldSession*, uint32) (Guild.h:725 /
-    // Guild.cpp:1703): that function atomically debits the depositing player
-    // (ModifyMoney(-amount) + SaveGoldToDB) and credits the bank
-    // (_ModifyBankMoney) inside one DB transaction, so we never touch bank money
-    // directly and the two sides can't desync. Then log + emit telemetry.
-    //
-    // taxableCopper is the amount the bot gained this event; we never tax more
-    // than that, and never more than the bot actually holds (no underflow).
-    void MaybePayGuildTax(Player* bot, uint32 taxableCopper)
-    {
-        BotEconomy::Config const& cfg = GetConfig();
-
-        // Nothing was earned this event -> nothing to tax.
-        if (taxableCopper == 0)
-            return;
-
-        uint32 onHand = bot->GetMoney();
-        if (onHand == 0)
-            return;
-
-        uint32 guildId = bot->GetGuildId();
-        if (guildId == 0)
-            return;
-
-        Guild* guild = bot->GetGuild();
-        if (!guild)
-            return;
-
-        WorldSession* session = bot->GetSession();
-        if (!session)
-            return;
-
-        // 1% (config) of the taxable increment, with a 1-copper minimum floor.
-        uint32 tax = static_cast<uint32>((static_cast<uint64>(taxableCopper) * cfg.GuildTaxPct) / 100);
-        if (tax == 0)
-            tax = 1; // minimum 1 copper per taxed event
-
-        // Never tax more than the bot earned this event...
-        if (tax > taxableCopper)
-            tax = taxableCopper;
-
-        // ...and never more than the bot actually holds (no underflow).
-        if (tax > onHand)
-            tax = onHand;
-
-        // Real Guild deposit path: debits the bot, credits the guild bank.
-        guild->HandleMemberDepositMoney(session, tax);
-
-        uint32 botGuidLow = bot->GetGUID().GetCounter();
-        CharacterDatabase.Execute(
-            "INSERT INTO `bot_tax_log` (`bot_guid`, `guild_id`, `gold_copper`, `ts`) VALUES ({}, {}, {}, {})",
-            botGuidLow, guildId, tax, NowUnix());
-
-        BotEconomy::Emit("tax_paid", {
-            {"bot",   std::to_string(botGuidLow)},
-            {"name",  bot->GetName()},
-            {"guild", std::to_string(guildId)},
-            {"gold",  std::to_string(tax)},
-        });
-    }
+    // NOTE: guild taxation was moved out of this module into the standalone
+    // mod-guild-tax module (kill + quest-turn-in tax into the bot's own guild
+    // bank). mod-bot-economy no longer taxes anything.
 
     // ---- gold-surplus warehouse deposit --------------------------------
     //
@@ -261,13 +183,6 @@ public:
                 {"zone",         std::to_string(killer->GetZoneId())},
             });
         }
-
-        // Task 2: tax a slice of the gold EARNED from this kill into the guild
-        // bank. The taxable base is the kill's gold value (a proxy for the loot
-        // gold the bot gains from the kill) plus any bonus this module granted -
-        // NOT the bot's whole wallet. So a level-1 bot yields ~1 copper, not a
-        // cut of its entire (manager-seeded) balance.
-        MaybePayGuildTax(killer, baseValue + bonus);
     }
 
     // Task 3: direct deposit. Kept intentionally minimal and SAFE - we write a
@@ -343,17 +258,11 @@ public:
         BotEconomy::Config& cfg = GetConfig();
         cfg.DadModeEnabled    = sConfigMgr->GetOption<bool>("DadMode.Enabled", false);
         cfg.KillGoldBonusPct  = sConfigMgr->GetOption<uint32>("DadMode.Economy.KillGoldBonusPct", 0);
-        cfg.GuildTaxPct       = sConfigMgr->GetOption<uint32>("DadMode.Economy.GuildTaxPct", 1);
         cfg.TaxMinGoldCopper  = sConfigMgr->GetOption<uint32>("DadMode.Economy.TaxMinGoldCopper", 5000);
         cfg.SorterEnabled     = sConfigMgr->GetOption<bool>("DadMode.Economy.SorterEnabled", true);
         cfg.SorterIntervalSec = sConfigMgr->GetOption<uint32>("DadMode.Economy.SorterIntervalSec", 300);
         cfg.WarehouseLootThreshold = sConfigMgr->GetOption<uint32>("DadMode.Economy.WarehouseLootThreshold", 0);
         cfg.WarehouseSweepSec = sConfigMgr->GetOption<uint32>("DadMode.Economy.WarehouseSweepSec", 600);
-
-        // Clamp GuildTaxPct to a sane range so a fat-fingered config can't
-        // try to deposit >100% of a bot's gold.
-        if (cfg.GuildTaxPct > 100)
-            cfg.GuildTaxPct = 100;
     }
 
     void OnStartup() override

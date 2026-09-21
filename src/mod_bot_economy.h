@@ -28,7 +28,6 @@ namespace BotEconomy
     {
         bool     DadModeEnabled     = false;
         uint32   KillGoldBonusPct   = 0;
-        uint32   GuildTaxPct        = 1;
         uint32   TaxMinGoldCopper   = 5000;
         bool     SorterEnabled      = true;
         uint32   SorterIntervalSec  = 300;

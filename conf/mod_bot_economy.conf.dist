@@ -7,7 +7,6 @@
 # A "Dad Mode" bot-economy module for the mod-playerbots fork.
 # It makes random playerbots feed a small, self-contained economy:
 #   * a gold bonus on creature kills
-#   * a guild "tax" that trickles bot gold into their guild bank
 #   * a warehouse ledger of surplus deposits
 #   * a periodic, player-safe warehouse "sorter" (stack consolidation)
 #
@@ -37,15 +36,9 @@ DadMode.Enabled = 0
 DadMode.Economy.KillGoldBonusPct = 0
 
 #
-#    DadMode.Economy.GuildTaxPct
-#        Percentage of the gold a bot JUST EARNED this event (the taxable
-#        increment - e.g. a kill's gold value - NOT the bot's whole wallet) that
-#        is moved into its guild bank. A floor of 1 copper is always applied so
-#        tiny incomes still contribute at least 1 copper; the tax never exceeds
-#        the amount earned nor the bot's on-hand gold.
-#        Default: 1
+#    NOTE: Guild taxation moved to the standalone mod-guild-tax module
+#    (DadMode.Economy.GuildTaxPct no longer exists here). See mod_guild_tax.conf.
 #
-DadMode.Economy.GuildTaxPct = 1
 
 #
 #    DadMode.Economy.TaxMinGoldCopper
