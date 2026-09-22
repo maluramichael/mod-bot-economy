@@ -84,7 +84,7 @@ namespace
     // and tolerate failure at runtime instead.
     void EnsureSchema()
     {
-        CharacterDatabase.Execute(
+        CharacterDatabase.DirectExecute(
             "CREATE TABLE IF NOT EXISTS `bot_warehouse` ("
             "`id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, "
             "`owner_guid` INT UNSIGNED NOT NULL, "
